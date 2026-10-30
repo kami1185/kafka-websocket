@@ -1,0 +1,61 @@
+services:
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    environment:
+      CLUSTER_ID: 'ULPlA8IRSzaJ3fEL32Ss3g'
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:9093'
+
+      # --- Configuración de Red para Comunicación Interna ---
+      KAFKA_LISTENERS: 'INTERNAL://0.0.0.0:9092,CONTROLLER://kafka:9093'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka:9092'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+
+      # --- Configuraciones para un solo nodo ---
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 3000
+
+      # --- Capa 2: Crear los topics al iniciar ---
+      KAFKA_CREATE_TOPICS: "weather-data:1:1,weather-alerts:1:1"
+
+    healthcheck:
+        test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+        start_period: 20s
+
+  producer:
+    build: .
+    command: node producer.js
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  dashboard-backend:
+    build: .
+    command: node dashboard-backend.js
+    ports:
+      - "8090:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  alerts-processor:
+    build: .
+    command: node alerts-processor.js
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  alerts-backend:
+    build: .
+    command: node alerts-backend.js
+    ports:
+      - "8081:8081"
+    depends_on:
+      kafka:
+        condition: service_healthy
